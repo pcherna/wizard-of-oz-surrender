@@ -1,0 +1,9 @@
+{
+  "port": 8080,
+  "prefix": "Surrender",
+  "delaySeconds": 60,
+  "rotationSize": 3,
+  "timing": { "writeMs": 7000, "holdMs": 4000, "dissipateMs": 4000 },
+  "idleNames": ["Dorothy", "Peter", "Lise", "Natalie", "Alaska", "Josh", "David"],
+  "presetNames": ["Barney", "Betty", "Bob", "Rebecca", "Zack"]
+}

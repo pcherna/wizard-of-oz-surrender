@@ -1,0 +1,10 @@
+# Runtime queue state
+state.json
+state.json.tmp
+state.json.corrupt-*
+
+node_modules/
+.DS_Store
+
+# Claude Code planning notes
+.claude/

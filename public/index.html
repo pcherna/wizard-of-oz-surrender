@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Surrender Dorothy</title>
+  <style>
+    @font-face {
+      font-family: "Dancing Script";
+      src: url("fonts/DancingScript.ttf") format("truetype");
+      font-weight: 400 700;
+    }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #2f78c8; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    body.idle-cursor { cursor: none; }
+    #hint {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      font: 15px -apple-system, BlinkMacSystemFont, sans-serif; color: #fff;
+      background: rgba(0, 0, 0, .45); padding: 8px 16px; border-radius: 999px;
+      transition: opacity 1s; pointer-events: none;
+    }
+    #hint.gone { opacity: 0; }
+    /* Operator cue only: a small red dot when the server connection drops. */
+    #offline {
+      position: fixed; right: 12px; bottom: 12px; width: 10px; height: 10px; border-radius: 50%;
+      background: #d9534f; display: none;
+    }
+    #offline.show { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="sky"></canvas>
+  <div id="hint">Click for full screen</div>
+  <div id="offline" title="Not connected to the server"></div>
+  <script src="projector.js"></script>
+</body>
+</html>

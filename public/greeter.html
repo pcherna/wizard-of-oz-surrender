@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d0c">
+  <title>Greeter</title>
+  <style>
+    :root {
+      --bg: #0b0d0c;
+      --panel: #151a17;
+      --line: #26302a;
+      --text: #e8efe9;
+      --muted: #8a998f;
+      --accent: #4fbf6b;      /* Wicked Witch green */
+      --accent-ink: #06130a;
+      --danger: #d9534f;
+      --pending: #e0b341;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); }
+    body {
+      font: 16px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 0 12px calc(24px + env(safe-area-inset-bottom));
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      position: sticky; top: 0; z-index: 2;
+      background: var(--bg);
+      padding: calc(10px + env(safe-area-inset-top)) 0 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .title h1 { font-size: 15px; font-weight: 600; margin: 0; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+    #status { font-size: 13px; color: var(--muted); }
+    #status::before { content: "●"; margin-right: 4px; color: var(--danger); }
+    #status.ok::before { color: var(--accent); }
+    form { display: flex; gap: 8px; }
+    input {
+      flex: 1; min-width: 0;
+      font-size: 20px; padding: 12px 14px;
+      background: var(--panel); color: var(--text);
+      border: 1px solid var(--line); border-radius: 12px;
+      outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    button { font: inherit; border: 0; border-radius: 12px; cursor: pointer; touch-action: manipulation; }
+    .primary { background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 18px; padding: 0 18px; }
+    .primary:disabled { opacity: .35; }
+    h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 18px 0 8px; display: flex; justify-content: space-between; }
+    #presets {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px;
+      max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
+    }
+    #presets button {
+      background: var(--panel); color: var(--text); border: 1px solid var(--line);
+      padding: 14px 6px; font-size: 17px; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    #presets button:active { background: var(--accent); color: var(--accent-ink); }
+    .empty { color: var(--muted); font-size: 15px; padding: 6px 2px; grid-column: 1 / -1; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 6px 6px 6px 14px; margin-bottom: 6px;
+    }
+    li .name { flex: 1; font-size: 18px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    li .count { font-variant-numeric: tabular-nums; color: var(--pending); font-weight: 700; min-width: 3ch; text-align: right; }
+    li .now { background: var(--pending); color: #1a1405; font-weight: 700; padding: 10px 12px; }
+    li .remove { background: transparent; color: var(--muted); font-size: 24px; width: 44px; height: 44px; line-height: 1; }
+    li .remove:active { color: var(--danger); }
+    #live li { border-color: #2d5a39; }
+    .delay { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+    .delay button { background: var(--panel); color: var(--text); border: 1px solid var(--line); width: 64px; height: 48px; font-size: 18px; font-weight: 700; }
+    #delayValue { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 5ch; text-align: center; }
+    #toast {
+      position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+      background: var(--accent); color: var(--accent-ink); font-weight: 700;
+      padding: 10px 18px; border-radius: 999px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.error { background: var(--danger); color: #fff; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title"><h1>Surrender …</h1><span id="status">Connecting</span></div>
+    <form id="addForm" autocomplete="off">
+      <input id="nameInput" type="text" placeholder="Type a name" maxlength="30"
+             autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="send">
+      <button class="primary" id="addButton" type="submit" disabled>Add</button>
+    </form>
+  </header>
+
+  <h2><span>Quick pick</span><span id="presetCount"></span></h2>
+  <div id="presets"></div>
+
+  <h2><span>Waiting</span></h2>
+  <ul id="pending"></ul>
+
+  <h2><span>On the sky now</span></h2>
+  <ul id="live"></ul>
+
+  <h2><span>Delay before showing</span></h2>
+  <div class="delay">
+    <button id="delayDown" type="button">−15</button>
+    <span id="delayValue">–</span>
+    <button id="delayUp" type="button">+15</button>
+  </div>
+
+  <div id="toast"></div>
+  <script src="greeter.js"></script>
+</body>
+</html>

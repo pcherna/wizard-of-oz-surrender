@@ -1,0 +1,14 @@
+{
+  "name": "surrender-dorothy",
+  "version": "1.0.0",
+  "description": "Projector scene that skywrites \"Surrender <guest>\" in smoke, fed by a greeter's phone.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
