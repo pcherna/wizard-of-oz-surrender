@@ -97,6 +97,18 @@ function row(entry, { countdown = false, now = false, remove = false, replay = f
 const SHOWN_LIMIT = 5;
 const byLiveAt = (a, b) => a.liveAt - b.liveAt || a.createdAt - b.createdAt;
 
+// Keeps the first entry for each name in a newest-first list, so a replayed name
+// replaces its older row instead of pushing a different name off the list.
+function newestPerName(entries) {
+  const seen = new Set();
+  return entries.filter((e) => {
+    const key = e.name.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // Sorts entries into the three lists the page shows. The rules differ by mode.
 function groups(now) {
   if (state.mode === 'oneshot') {
@@ -104,7 +116,8 @@ function groups(now) {
     return {
       pending: state.entries.filter((e) => status(e) === 'queued').sort(byLiveAt).reverse(), // newest on top
       live: state.entries.filter((e) => status(e) === 'playing'),
-      shown: state.entries.filter((e) => status(e) === 'shown').sort(byLiveAt).slice(-SHOWN_LIMIT).reverse(),
+      shown: newestPerName(state.entries.filter((e) => status(e) === 'shown').sort(byLiveAt).reverse())
+        .slice(0, SHOWN_LIMIT),
     };
   }
   return {
@@ -189,6 +202,34 @@ function stepDelay(delta) {
 $('delayDown').addEventListener('click', () => stepDelay(-15));
 $('delayUp').addEventListener('click', () => stepDelay(15));
 
+// Sends the slider value at most every 100 ms while dragging, so the projector follows the finger.
+// Server updates don't move the slider during a drag, so it never jumps back under the finger.
+const brightness = $('brightness');
+let draggingBrightness = false;
+let brightnessTimer = null;
+let brightnessSent = Promise.resolve(); // one request at a time, so the last value always lands last
+function sendBrightness() {
+  brightnessTimer = null;
+  const percent = Number(brightness.value);
+  brightnessSent = brightnessSent.then(() => api('POST', '/api/brightness', { percent }));
+}
+brightness.addEventListener('input', () => {
+  draggingBrightness = true;
+  $('brightnessValue').textContent = `${brightness.value}%`;
+  brightnessTimer ??= setTimeout(sendBrightness, 100);
+});
+brightness.addEventListener('change', () => {
+  draggingBrightness = false;
+  clearTimeout(brightnessTimer);
+  sendBrightness();
+});
+
+function renderBrightness() {
+  if (draggingBrightness) return;
+  brightness.value = state.brightness;
+  $('brightnessValue').textContent = `${state.brightness}%`;
+}
+
 setInterval(() => {
   if (state) renderQueue();
 }, 1000);
@@ -214,4 +255,5 @@ events.onmessage = (event) => {
   document.querySelector('.title h1').textContent = `${state.prefix} …`;
   if (JSON.stringify(state.presetNames) !== previousPresets) renderPresets();
   renderQueue(true);
+  renderBrightness();
 };

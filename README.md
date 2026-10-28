@@ -39,12 +39,13 @@ Turn off sleep on the laptop before the event (System Settings > Lock Screen and
 - The Waiting list shows each name with a countdown. Tap Now to send a name to the sky straight away. Tap × to remove a typo.
 - The "On the sky now" list shows the names in the rotation. Tap × to remove one.
 - Use −15 and +15 to change the delay during the night. The change applies to names you add afterwards.
+- If the projector is too bright, drag the Projector brightness slider at the bottom of the page. The projector follows as you drag, down to 10%. The setting is saved, so it survives a reload or a restart.
 
 In one-shot mode, the page changes:
 
 - The Up next list shows names waiting for their turn, with a countdown. The newest name is on top, and the next name to play is at the bottom. Tap × to remove one. Later names move up.
 - Tap × on the name in "On the sky now" to stop it. The witch stops writing, and the smoke fades off in about a second. The next name starts a second after that. A stopped name doesn't go to the Shown list.
-- The Shown list has the last five names shown. Tap Replay to put a name at the back of the line.
+- The Shown list has the last five names shown, newest on top. Each name appears once: when a name plays again, it moves to the top. Tap Replay to put a name at the back of the line.
 - The Now button and the delay controls are hidden. One-shot mode has no delay.
 
 ## Configuration
@@ -72,7 +73,7 @@ In one-shot mode, each name gets a slot of `writeMs` + `holdMs` + `dissipateMs` 
 | `idleNames` | Dorothy, Peter, … | Rotation mode only. Names shown before any guest name goes live. |
 | `presetNames` | Barney, Betty, … | The greeter's quick-pick list. |
 
-The server saves the queue and the current delay to `state.json`, so a restart keeps them. The current delay is whichever changed last: the phone's −15 and +15 buttons, or an edit to `delaySeconds` while the server runs. At startup, the saved delay wins over `delaySeconds`. To start a fresh night, stop the server and delete `state.json`.
+The server saves the queue, the current delay and the projector brightness to `state.json`, so a restart keeps them. The current delay is whichever changed last: the phone's −15 and +15 buttons, or an edit to `delaySeconds` while the server runs. At startup, the saved delay wins over `delaySeconds`. To start a fresh night, stop the server and delete `state.json`.
 
 ## Hot reload
 

@@ -572,6 +572,7 @@ function connect() {
     rotation = state.rotation;
     entries = state.entries;
     stopFadeMs = state.stopFadeMs;
+    canvas.style.filter = state.brightness < 100 ? `brightness(${state.brightness}%)` : '';
     // One-shot: the name on the sky was removed on the phone, so stop it.
     if (cycle?.id && cycle.stoppedAt === null && !entries.some((e) => e.id === cycle.id)) {
       cycle.stoppedAt = performance.now();

@@ -69,6 +69,7 @@ function publicState(now = Date.now()) {
     rotationSize: config.rotationSize,
     presetNames: config.presetNames,
     delaySeconds: state.delaySeconds,
+    brightness: state.brightness ?? 100, // state.json files from before the slider have none
     entries: [...state.entries].sort((a, b) => a.createdAt - b.createdAt),
     rotation: queue.rotation(state, config, now),
   };
@@ -223,6 +224,12 @@ async function handleApi(req, res, pathname) {
     if (!queue.setDelay(state, (await readJson(req)).seconds)) return sendJson(res, 400, { error: 'invalid seconds' });
     changed();
     return sendJson(res, 200, { delaySeconds: state.delaySeconds });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/brightness') {
+    if (!queue.setBrightness(state, (await readJson(req)).percent)) return sendJson(res, 400, { error: 'invalid percent' });
+    changed();
+    return sendJson(res, 200, { brightness: state.brightness });
   }
 
   const match = pathname.match(/^\/api\/names\/([^/]+)(\/now)?$/);

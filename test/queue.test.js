@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createState, normalizeName, addName, removeName, sendNow, setDelay, rotation, nextLiveAt,
+  createState, normalizeName, addName, removeName, sendNow, setDelay, setBrightness, rotation, nextLiveAt,
   slotMs, oneshotStatus, enqueueName, reschedule, removeOneshot, ONESHOT_GAP_MS, STOP_FADE_MS,
 } from '../lib/queue.js';
 
@@ -185,4 +185,16 @@ test('removing a queued name does not hold up the sky', () => {
   assert.equal(state.skyClearAt, undefined);
   assert.equal(c.liveAt, SLOT);
   assert.equal(removeOneshot(state, 'nope', SLOT, 3000), false);
+});
+
+test('setBrightness rounds and clamps to 10..100 and rejects junk', () => {
+  const state = createState(60);
+  assert.equal(setBrightness(state, 42.6), true);
+  assert.equal(state.brightness, 43);
+  setBrightness(state, 0);
+  assert.equal(state.brightness, 10);
+  setBrightness(state, 250);
+  assert.equal(state.brightness, 100);
+  assert.equal(setBrightness(state, 'dim'), false);
+  assert.equal(state.brightness, 100);
 });
