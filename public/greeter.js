@@ -39,7 +39,11 @@ async function addName(name) {
 function renderPresets() {
   const filter = input.value.trim().toLocaleLowerCase();
   const all = [...state.presetNames].sort((a, b) => a.localeCompare(b));
-  const matches = filter ? all.filter((n) => n.toLocaleLowerCase().startsWith(filter)) : all;
+  // Matches anywhere in the name. Names that start with the typed text come first.
+  const starts = (n) => n.toLocaleLowerCase().startsWith(filter);
+  const matches = filter
+    ? all.filter((n) => n.toLocaleLowerCase().includes(filter)).sort((a, b) => starts(b) - starts(a))
+    : all;
   const grid = $('presets');
   grid.replaceChildren(...matches.map((name) => {
     const b = document.createElement('button');

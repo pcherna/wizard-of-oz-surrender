@@ -40,7 +40,7 @@ Turn off sleep on the laptop before the event (System Settings > Lock Screen and
 
 ## Using the greeter page
 
-- Type the first letter or two of a name. The quick-pick list narrows to names that start with those letters. Tap a name to add it.
+- Type a few letters of a name. The quick-pick list narrows to names that contain those letters anywhere, so "man" finds Batman and Iron Man. Names that start with the letters come first. Tap a name to add it.
 - To add a name that isn't on the list, type it and tap Add.
 - The Waiting list shows each name with a countdown. Tap Now to send a name to the sky straight away. Tap × to remove a typo.
 - The "On the sky now" list shows the names in the rotation. Tap × to remove one.
