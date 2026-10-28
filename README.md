@@ -1,11 +1,17 @@
 # Surrender Dorothy
 
-A projector scene for a haunted house. The Wicked Witch flies across a blue sky and writes "Surrender" in smoke. Then she turns and writes a guest's name on the line below.
+Every year for Halloween night, we do a haunted house in our garage for the kids to walk through. This year's theme is the Wizard of Oz. For that, I created this effect:
+
+The Wicked Witch flies across a blue sky and writes "Surrender" in smoke. Then she turns and writes a guest's name or costume name on the line below.
 
 A greeter at the entrance enters each guest's name on a phone. The app has two modes, set by `mode` in `config.json`:
 
 - Rotation mode (`"rotation"`, the default). The name waits for a delay (60 seconds by default) while the guest walks to the projector room. Then it joins the rotation on the sky. The sky cycles through the last three names. Until the first guest name goes live, it cycles through a fixed idle list.
 - One-shot mode (`"oneshot"`). The sky shows only clouds until the greeter adds a name. The witch then writes that name once, at once, and the sky goes back to clouds. If a name is on the sky already, the new name waits its turn.
+
+## Use of AI Coding Tools
+
+This package was developed using Claude Code and Claude Opus 5.5.
 
 ## What you need
 
