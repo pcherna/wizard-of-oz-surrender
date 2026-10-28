@@ -7,10 +7,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as queue from './lib/queue.js';
+import { loadConfig } from './lib/config.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
+const CONFIG_FILE = path.join(ROOT, 'config.json');
+let config = loadConfig(CONFIG_FILE);
 const PORT = Number(process.env.PORT) || config.port;
 const STATE_FILE = process.env.STATE_FILE || path.join(ROOT, 'state.json');
 
@@ -52,10 +54,16 @@ function saveState() {
 }
 
 const state = loadState();
+const isOneshot = () => config.mode === 'oneshot';
+const slot = () => queue.slotMs(config.timing);
 
 function publicState(now = Date.now()) {
   return {
     serverNow: now,
+    codeVersion,
+    mode: config.mode,
+    slotMs: slot(),
+    stopFadeMs: queue.STOP_FADE_MS,
     prefix: config.prefix,
     timing: config.timing,
     rotationSize: config.rotationSize,
@@ -103,6 +111,52 @@ function openEventStream(req, res) {
   clients.add(res);
   req.on('close', () => clients.delete(res));
 }
+
+// ---------- Live config reload ----------
+
+// Polls the file's timestamp, which also catches editors that save by replacing the file.
+// An invalid file is ignored, and the running config stays in place.
+function reloadConfig() {
+  let next;
+  try {
+    next = loadConfig(CONFIG_FILE);
+  } catch (err) {
+    console.warn(`config.json not applied: ${err.message}`);
+    return;
+  }
+  const previous = config;
+  config = next;
+  if (next.port !== previous.port) console.warn(`config.json: the port change to ${next.port} needs a server restart.`);
+  // A delay edited in the file wins over one set from the phone. At startup, the saved delay wins.
+  if (next.delaySeconds !== previous.delaySeconds) queue.setDelay(state, next.delaySeconds);
+  // Entering one-shot mode, or a new slot length, re-packs the names still waiting.
+  if (isOneshot() && (previous.mode !== next.mode || queue.slotMs(previous.timing) !== slot())) {
+    queue.reschedule(state, slot(), Date.now());
+  }
+  if (previous.mode !== next.mode) console.log(`Mode is now ${next.mode}.`);
+  console.log('config.json reloaded.');
+  changed();
+}
+
+fs.watchFile(CONFIG_FILE, { interval: 500 }, (curr, prev) => {
+  if (curr.mtimeMs !== prev.mtimeMs) reloadConfig();
+});
+
+// ---------- Hot reload ----------
+
+// `npm start` runs node --watch, which restarts the server when its code changes. Each start
+// gets a new codeVersion, and so does each edit under public/. A page reloads when it changes.
+let codeVersion = Date.now();
+let publicTimer = null;
+fs.watch(PUBLIC_DIR, { recursive: true }, (event, file) => {
+  if (!file || path.basename(file).startsWith('.') || file.endsWith('~')) return; // editor temp files
+  clearTimeout(publicTimer);
+  publicTimer = setTimeout(() => { // one save can fire several events
+    codeVersion = Date.now();
+    console.log(`public/${file} changed. Reloading the open pages.`);
+    broadcast();
+  }, 200);
+});
 
 // Keeps idle connections open through proxies and Wi-Fi power saving.
 setInterval(() => {
@@ -158,7 +212,8 @@ async function handleApi(req, res, pathname) {
   if (req.method === 'GET' && pathname === '/api/state') return sendJson(res, 200, publicState(now));
 
   if (req.method === 'POST' && pathname === '/api/names') {
-    const entry = queue.addName(state, (await readJson(req)).name, now);
+    const { name } = await readJson(req);
+    const entry = isOneshot() ? queue.enqueueName(state, name, slot(), now) : queue.addName(state, name, now);
     if (!entry) return sendJson(res, 400, { error: 'name is empty' });
     changed();
     return sendJson(res, 201, entry);
@@ -174,9 +229,12 @@ async function handleApi(req, res, pathname) {
   if (match) {
     const id = decodeURIComponent(match[1]);
     let ok = false;
-    if (req.method === 'POST' && match[2]) ok = queue.sendNow(state, id, now);
-    else if (req.method === 'DELETE' && !match[2]) ok = queue.removeName(state, id);
-    else return sendJson(res, 405, { error: 'method not allowed' });
+    if (req.method === 'POST' && match[2]) {
+      if (isOneshot()) return sendJson(res, 409, { error: 'send now is not used in one-shot mode' });
+      ok = queue.sendNow(state, id, now);
+    } else if (req.method === 'DELETE' && !match[2]) {
+      ok = isOneshot() ? queue.removeOneshot(state, id, slot(), now) : queue.removeName(state, id);
+    } else return sendJson(res, 405, { error: 'method not allowed' });
     if (!ok) return sendJson(res, 404, { error: match[2] ? 'no such pending name' : 'no such name' });
     changed();
     return sendJson(res, 200, { ok: true });
@@ -197,6 +255,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+if (isOneshot()) {
+  queue.reschedule(state, slot(), Date.now());
+  saveState();
+}
+
 server.listen(PORT, () => {
   scheduleNextLive();
   const addresses = Object.values(os.networkInterfaces())
@@ -207,5 +270,6 @@ server.listen(PORT, () => {
   console.log(`  Projector: http://localhost:${PORT}/`);
   for (const ip of addresses) console.log(`  Greeter:   http://${ip}:${PORT}/greeter`);
   if (addresses.length === 0) console.log('  Greeter:   no Wi-Fi address found. Is the laptop on the network?');
-  console.log(`\n  Delay ${state.delaySeconds}s, rotation of ${config.rotationSize}, state in ${STATE_FILE}`);
+  const settings = isOneshot() ? 'one-shot mode' : `rotation mode, delay ${state.delaySeconds}s, rotation of ${config.rotationSize}`;
+  console.log(`\n  ${settings}, state in ${STATE_FILE}`);
 });

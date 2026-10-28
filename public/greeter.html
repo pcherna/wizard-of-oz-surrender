@@ -68,6 +68,9 @@
     li .name { flex: 1; font-size: 18px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     li .count { font-variant-numeric: tabular-nums; color: var(--pending); font-weight: 700; min-width: 3ch; text-align: right; }
     li .now { background: var(--pending); color: #1a1405; font-weight: 700; padding: 10px 12px; }
+    li .replay { background: #2d5a39; color: var(--text); font-weight: 700; padding: 10px 12px; }
+    li .replay:active { background: var(--accent); color: var(--accent-ink); }
+    #shown li { opacity: .8; }
     li .remove { background: transparent; color: var(--muted); font-size: 24px; width: 44px; height: 44px; line-height: 1; }
     li .remove:active { color: var(--danger); }
     #live li { border-color: #2d5a39; }
@@ -96,18 +99,25 @@
   <h2><span>Quick pick</span><span id="presetCount"></span></h2>
   <div id="presets"></div>
 
-  <h2><span>Waiting</span></h2>
+  <h2><span id="pendingTitle">Waiting</span></h2>
   <ul id="pending"></ul>
 
   <h2><span>On the sky now</span></h2>
   <ul id="live"></ul>
 
-  <h2><span>Delay before showing</span></h2>
-  <div class="delay">
-    <button id="delayDown" type="button">−15</button>
-    <span id="delayValue">–</span>
-    <button id="delayUp" type="button">+15</button>
-  </div>
+  <section id="shownSection" hidden>
+    <h2><span>Shown</span></h2>
+    <ul id="shown"></ul>
+  </section>
+
+  <section id="delaySection">
+    <h2><span>Delay before showing</span></h2>
+    <div class="delay">
+      <button id="delayDown" type="button">−15</button>
+      <span id="delayValue">–</span>
+      <button id="delayUp" type="button">+15</button>
+    </div>
+  </section>
 
   <div id="toast"></div>
   <script src="greeter.js"></script>

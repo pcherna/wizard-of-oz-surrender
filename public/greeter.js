@@ -1,4 +1,6 @@
 // Greeter phone page: pick or type a guest's name, watch the queue, tune the delay.
+// In one-shot mode the delay is unused: names play in turn, and shown names can be replayed.
+// Up next lists the newest name on top, so the next to play sits just above "On the sky now".
 
 const $ = (id) => document.getElementById(id);
 const input = $('nameInput');
@@ -6,6 +8,7 @@ const addButton = $('addButton');
 
 let state = null;
 let clockOffset = 0; // serverNow - local now, so countdowns survive a wrong phone clock
+let codeVersion = null; // the server's code version when this page loaded
 
 const serverNow = () => Date.now() + clockOffset;
 
@@ -59,63 +62,94 @@ function renderPresets() {
   $('presetCount').textContent = filter ? `${matches.length} of ${all.length}` : String(all.length);
 }
 
-function row(entry, { countdown }) {
+function button(className, label, onClick) {
+  const b = document.createElement('button');
+  b.className = className;
+  b.type = 'button';
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function row(entry, { countdown = false, now = false, remove = false, replay = false }) {
   const li = document.createElement('li');
   const name = document.createElement('span');
   name.className = 'name';
   name.textContent = entry.name;
   li.append(name);
+  const path = `/api/names/${encodeURIComponent(entry.id)}`;
   if (countdown) {
     const count = document.createElement('span');
     count.className = 'count';
     count.dataset.liveAt = entry.liveAt;
     li.append(count);
-    const now = document.createElement('button');
-    now.className = 'now';
-    now.type = 'button';
-    now.textContent = 'Now';
-    now.addEventListener('click', () => api('POST', `/api/names/${encodeURIComponent(entry.id)}/now`));
-    li.append(now);
   }
-  const remove = document.createElement('button');
-  remove.className = 'remove';
-  remove.type = 'button';
-  remove.setAttribute('aria-label', `Remove ${entry.name}`);
-  remove.textContent = '×';
-  remove.addEventListener('click', () => api('DELETE', `/api/names/${encodeURIComponent(entry.id)}`));
-  li.append(remove);
+  if (now) li.append(button('now', 'Now', () => api('POST', `${path}/now`)));
+  if (replay) li.append(button('replay', 'Replay', () => addName(entry.name)));
+  if (remove) {
+    const b = button('remove', '×', () => api('DELETE', path));
+    b.setAttribute('aria-label', `Remove ${entry.name}`);
+    li.append(b);
+  }
   return li;
 }
 
-// Rebuilds the pending and live lists. Called on each server update and when a name goes live.
-function renderQueue() {
-  const now = serverNow();
-  const pending = state.entries.filter((e) => e.liveAt > now).sort((a, b) => a.liveAt - b.liveAt);
-  const live = state.entries
-    .filter((e) => e.liveAt <= now)
-    .sort((a, b) => a.liveAt - b.liveAt || a.createdAt - b.createdAt)
-    .slice(-state.rotationSize)
-    .reverse();
+const SHOWN_LIMIT = 5;
+const byLiveAt = (a, b) => a.liveAt - b.liveAt || a.createdAt - b.createdAt;
 
-  $('pending').replaceChildren(...pending.map((e) => row(e, { countdown: true })));
-  if (!pending.length) $('pending').innerHTML = '<div class="empty">Nobody waiting.</div>';
+// Sorts entries into the three lists the page shows. The rules differ by mode.
+function groups(now) {
+  if (state.mode === 'oneshot') {
+    const status = (e) => (e.liveAt > now ? 'queued' : e.liveAt + state.slotMs > now ? 'playing' : 'shown');
+    return {
+      pending: state.entries.filter((e) => status(e) === 'queued').sort(byLiveAt).reverse(), // newest on top
+      live: state.entries.filter((e) => status(e) === 'playing'),
+      shown: state.entries.filter((e) => status(e) === 'shown').sort(byLiveAt).slice(-SHOWN_LIMIT).reverse(),
+    };
+  }
+  return {
+    pending: state.entries.filter((e) => e.liveAt > now).sort(byLiveAt),
+    live: state.entries.filter((e) => e.liveAt <= now).sort(byLiveAt).slice(-state.rotationSize).reverse(),
+    shown: [],
+  };
+}
 
-  $('live').replaceChildren(...live.map((e) => row(e, { countdown: false })));
-  if (!live.length) $('live').innerHTML = '<div class="empty">No guests yet. The sky shows the idle names.</div>';
+function fill(list, entries, options, emptyText) {
+  list.replaceChildren(...entries.map((e) => row(e, options)));
+  if (!entries.length) list.innerHTML = `<div class="empty">${emptyText}</div>`;
+}
 
-  $('delayValue').textContent = `${state.delaySeconds}s`;
+let renderedKey = '';
+
+// Rebuilds the lists when a server update arrives (`force`) or when a name changes list.
+// Otherwise only the countdowns tick, so a button is never replaced under a finger.
+function renderQueue(force = false) {
+  const g = groups(serverNow());
+  const key = state.mode + [g.pending, g.live, g.shown].map((l) => l.map((e) => e.id).join(',')).join('|');
+  if (force || key !== renderedKey) {
+    renderedKey = key;
+    const oneshot = state.mode === 'oneshot';
+    $('pendingTitle').textContent = oneshot ? 'Up next' : 'Waiting';
+    if (oneshot) {
+      fill($('pending'), g.pending, { countdown: true, remove: true }, 'Nobody in line.');
+      fill($('live'), g.live, { remove: true }, 'Clear sky. The next name plays at once.');
+      fill($('shown'), g.shown, { replay: true }, 'Nothing shown yet.');
+    } else {
+      fill($('pending'), g.pending, { countdown: true, now: true, remove: true }, 'Nobody waiting.');
+      fill($('live'), g.live, { remove: true }, 'No guests yet. The sky shows the idle names.');
+    }
+    $('shownSection').hidden = !oneshot;
+    $('delaySection').hidden = oneshot;
+    $('delayValue').textContent = `${state.delaySeconds}s`;
+  }
   updateCountdowns();
 }
 
-// Ticks every second. Returns true when a pending name has crossed into live.
 function updateCountdowns() {
-  let crossed = false;
   for (const el of document.querySelectorAll('.count')) {
     const seconds = Math.ceil((Number(el.dataset.liveAt) - serverNow()) / 1000);
-    if (seconds <= 0) crossed = true;
     el.textContent = `${Math.max(0, seconds)}s`;
   }
-  return crossed;
 }
 
 function updateAddButton() {
@@ -156,7 +190,7 @@ $('delayDown').addEventListener('click', () => stepDelay(-15));
 $('delayUp').addEventListener('click', () => stepDelay(15));
 
 setInterval(() => {
-  if (state && updateCountdowns()) renderQueue();
+  if (state) renderQueue();
 }, 1000);
 
 // ---------- Live updates ----------
@@ -171,10 +205,13 @@ events.onerror = () => {
   $('status').classList.remove('ok');
 };
 events.onmessage = (event) => {
-  const first = state === null;
-  state = JSON.parse(event.data);
+  const next = JSON.parse(event.data);
+  codeVersion ??= next.codeVersion;
+  if (next.codeVersion !== codeVersion) return location.reload(); // the app code changed
+  const previousPresets = state && JSON.stringify(state.presetNames);
+  state = next;
   clockOffset = state.serverNow - Date.now();
   document.querySelector('.title h1').textContent = `${state.prefix} …`;
-  if (first) renderPresets();
-  renderQueue();
+  if (JSON.stringify(state.presetNames) !== previousPresets) renderPresets();
+  renderQueue(true);
 };

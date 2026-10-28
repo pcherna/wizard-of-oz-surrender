@@ -1,5 +1,8 @@
 // Projector scene: a blue sky with drifting clouds, and the witch skywriting
 // "<prefix> <name>" in smoke. Names arrive from the server over Server-Sent Events.
+// Rotation mode cycles names without pause. One-shot mode plays each name once in its
+// server-scheduled slot and shows only clouds in between. Removing that name on the phone
+// stops it: the writing stops and the smoke fades off fast.
 
 const canvas = document.getElementById('sky');
 const ctx = canvas.getContext('2d');
@@ -18,9 +21,15 @@ let clouds = [];
 
 let prefix = 'Surrender';
 let timing = { writeMs: 7000, holdMs: 4000, dissipateMs: 4000 };
+let mode = 'rotation';
 let rotation = null;
 let lastName = null;
 let lastIndex = -1;
+let entries = [];
+let clockOffset = 0;     // serverNow - local now, so slots line up with the phone's countdowns
+let lastPlayedId = null; // one-shot: the slot outlasts the animation, so don't replay it
+let stopFadeMs = 1000;
+let codeVersion = null; // the server's code version when this page loaded
 
 let cycle = null;
 let trail = [];
@@ -158,7 +167,8 @@ function samplePoints(filled, step, width, height) {
 }
 
 // Two lines: the prefix written left to right, then the name written right to left.
-function buildCycle(name, startAt) {
+// `id` is the entry being played in one-shot mode, so the cycle can be stopped. Null in rotation mode.
+function buildCycle(name, startAt, id = null) {
   const off = document.createElement('canvas');
   off.width = Math.ceil(W);
   off.height = Math.ceil(H);
@@ -202,7 +212,9 @@ function buildCycle(name, startAt) {
 
   const witchScale = (sizes[0] * 0.54) / WITCH_UNITS;
   return {
-    name, startAt, step, lines,
+    name, startAt, id, step, lines,
+    stoppedAt: null,
+    timing, // fixed for this cycle, so a config reload never jumps the witch mid-flight
     points: lines.flatMap((l) => l.points),
     r0: step * 2.2,
     witch: {
@@ -229,6 +241,15 @@ function nextName() {
 }
 
 function startNextCycle(now) {
+  if (mode === 'oneshot') {
+    // Join the name whose slot covers this moment. After a page reload, that may be mid-flight.
+    const t = Date.now() + clockOffset;
+    const length = timing.writeMs + timing.holdMs + timing.dissipateMs;
+    const due = entries.find((e) => e.id !== lastPlayedId && e.liveAt <= t && t < e.liveAt + length);
+    cycle = due ? buildCycle(due.name, now - (t - due.liveAt), due.id) : null;
+    if (due) lastPlayedId = due.id;
+    return;
+  }
   cycle = rotation && rotation.length ? buildCycle(nextName(), now) : null;
 }
 
@@ -338,14 +359,14 @@ function spawnTrail(x, y, dt, r0, facing) {
   }
 }
 
-function drawTrail(dt) {
+function drawTrail(dt, fade = 1) {
   trail = trail.filter((p) => (p.age += dt) < p.life);
   for (const p of trail) {
     const t = p.age / p.life;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     const r = p.r * (1 + t * 2);
-    ctx.globalAlpha = p.alpha * (1 - t) * Math.min(1, p.age * 8);
+    ctx.globalAlpha = p.alpha * (1 - t) * Math.min(1, p.age * 8) * fade;
     ctx.drawImage(puffSprite, p.x - r, p.y - r, r * 2, r * 2);
   }
   ctx.globalAlpha = 1;
@@ -356,7 +377,7 @@ function drawTrail(dt) {
 // `y` is null while writing, because the witch then follows the strokes.
 function penAt(c, e) {
   const [l1, l2] = c.lines;
-  const { writeMs } = timing;
+  const { writeMs } = c.timing;
   const leadMs = writeMs * LEAD_IN;
   const turnMs = writeMs * TURN;
   const inkMs = writeMs - leadMs - turnMs;
@@ -400,13 +421,17 @@ function reveal(c, pen, now) {
 
 function drawCycle(now, dt) {
   const c = cycle;
-  const { writeMs, holdMs, dissipateMs } = timing;
+  const { writeMs, holdMs, dissipateMs } = c.timing;
   const e = now - c.startAt;
   const w = c.witch;
   const witchLength = WITCH_UNITS * w.scale;
 
+  // A stopped name writes no more strokes, and everything fades out over `stopFadeMs`.
+  const stopped = c.stoppedAt !== null;
+  const stop = stopped ? clamp01((now - c.stoppedAt) / stopFadeMs) : 0;
+
   const pen = penAt(c, e);
-  reveal(c, pen, now);
+  if (!stopped) reveal(c, pen, now);
 
   // While writing, the witch tracks the height of the strokes just written, smoothed.
   if (pen.y !== null) w.targetY = pen.y;
@@ -429,7 +454,7 @@ function drawCycle(now, dt) {
   w.tilt += (tiltTarget - w.tilt) * (1 - Math.exp(-dt * 5));
 
   const witchVisible = pen.x < W + witchLength && pen.x > -witchLength - 20;
-  if (witchVisible && e >= writeMs * LEAD_IN * 0.5) spawnTrail(pen.x, w.y, dt, c.r0, pen.facing);
+  if (witchVisible && !stopped && e >= writeMs * LEAD_IN * 0.5) spawnTrail(pen.x, w.y, dt, c.r0, pen.facing);
 
   const d = clamp01((e - writeMs - holdMs) / dissipateMs);
   for (const p of c.points) {
@@ -448,16 +473,24 @@ function drawCycle(now, dt) {
       r *= 1 + local * 1.8;
       a *= Math.pow(1 - local, 1.6);
     }
+    if (stop > 0) {
+      r *= 1 + stop * 0.6;
+      a *= Math.pow(1 - stop, 1.5);
+    }
     if (a <= 0.003) continue;
     ctx.globalAlpha = a;
     ctx.drawImage(puffSprite, x - r, y - r, r * 2, r * 2);
   }
   ctx.globalAlpha = 1;
 
-  drawTrail(dt);
-  if (witchVisible) drawWitch(c.witch, now);
+  drawTrail(dt, 1 - stop);
+  if (witchVisible) {
+    ctx.globalAlpha = 1 - stop;
+    drawWitch(c.witch, now);
+    ctx.globalAlpha = 1;
+  }
 
-  return e < writeMs + holdMs + dissipateMs;
+  return stopped ? stop < 1 : e < writeMs + holdMs + dissipateMs;
 }
 
 // ---------- Frame loop ----------
@@ -468,7 +501,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   drawSky(now, dt);
-  if (!cycle && rotation) startNextCycle(now);
+  if (!cycle) startNextCycle(now);
   if (cycle && !drawCycle(now, dt)) {
     trail = [];
     startNextCycle(now);
@@ -497,8 +530,8 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     resize();
-    // Restart the current name so the smoke matches the new screen size.
-    if (cycle) cycle = buildCycle(cycle.name, performance.now());
+    // Rebuild the current name for the new screen size, at the same point in its flight.
+    if (cycle) cycle = { ...buildCycle(cycle.name, cycle.startAt, cycle.id), stoppedAt: cycle.stoppedAt };
     trail = [];
   }, 200);
 });
@@ -530,9 +563,19 @@ function connect() {
   events.onerror = () => offline.classList.add('show');
   events.onmessage = (event) => {
     const state = JSON.parse(event.data);
+    codeVersion ??= state.codeVersion;
+    if (state.codeVersion !== codeVersion) return location.reload(); // the app code changed
+    clockOffset = state.serverNow - Date.now();
+    mode = state.mode;
     prefix = state.prefix;
     timing = state.timing;
     rotation = state.rotation;
+    entries = state.entries;
+    stopFadeMs = state.stopFadeMs;
+    // One-shot: the name on the sky was removed on the phone, so stop it.
+    if (cycle?.id && cycle.stoppedAt === null && !entries.some((e) => e.id === cycle.id)) {
+      cycle.stoppedAt = performance.now();
+    }
   };
 }
 

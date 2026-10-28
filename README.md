@@ -2,11 +2,14 @@
 
 A projector scene for a haunted house. The Wicked Witch flies across a blue sky and writes "Surrender" in smoke. Then she turns and writes a guest's name on the line below.
 
-A greeter at the entrance enters each guest's name on a phone. The name waits for a delay (60 seconds by default) while the guest walks to the projector room. Then it joins the rotation on the sky. The sky cycles through the last three names. Until the first guest name goes live, it cycles through a fixed idle list.
+A greeter at the entrance enters each guest's name on a phone. The app has two modes, set by `mode` in `config.json`:
+
+- Rotation mode (`"rotation"`, the default). The name waits for a delay (60 seconds by default) while the guest walks to the projector room. Then it joins the rotation on the sky. The sky cycles through the last three names. Until the first guest name goes live, it cycles through a fixed idle list.
+- One-shot mode (`"oneshot"`). The sky shows only clouds until the greeter adds a name. The witch then writes that name once, at once, and the sky goes back to clouds. If a name is on the sky already, the new name waits its turn.
 
 ## What you need
 
-- A laptop with Node.js 18 or later. The app has no npm dependencies.
+- A laptop with Node.js 20 or later. The app has no npm dependencies.
 - A projector connected to the laptop.
 - A phone on the same Wi-Fi network as the laptop.
 
@@ -37,23 +40,47 @@ Turn off sleep on the laptop before the event (System Settings > Lock Screen and
 - The "On the sky now" list shows the names in the rotation. Tap × to remove one.
 - Use −15 and +15 to change the delay during the night. The change applies to names you add afterwards.
 
+In one-shot mode, the page changes:
+
+- The Up next list shows names waiting for their turn, with a countdown. The newest name is on top, and the next name to play is at the bottom. Tap × to remove one. Later names move up.
+- Tap × on the name in "On the sky now" to stop it. The witch stops writing, and the smoke fades off in about a second. The next name starts a second after that. A stopped name doesn't go to the Shown list.
+- The Shown list has the last five names shown. Tap Replay to put a name at the back of the line.
+- The Now button and the delay controls are hidden. One-shot mode has no delay.
+
 ## Configuration
 
-All settings are in `config.json`. Restart the server after you change them.
+All settings are in `config.json`. The server reloads the file within a second of each save, and the open pages update by themselves. Only a change to `port` needs a server restart.
+
+If the file has a mistake, for example a missing comma, the server keeps the last good settings. It prints the problem in the terminal where it runs.
+
+On the projector, a new `prefix` or `timing` takes effect with the next name. The name being written finishes first.
+
+You can switch `mode` during the night. When you switch to one-shot mode, names still waiting for their delay play one after another, starting at once.
+
+In one-shot mode, each name gets a slot of `writeMs` + `holdMs` + `dissipateMs` plus one second of clear sky. With the default timing, that's 16 seconds.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `port` | `8080` | Port for both pages. |
+| `port` | `8080` | Port for both pages. Needs a restart. |
+| `mode` | `"rotation"` | `"rotation"` or `"oneshot"`. See the start of this file. |
 | `prefix` | `"Surrender"` | The first line of text. |
-| `delaySeconds` | `60` | Seconds before a new name goes live. Used only on the first run (see below). |
-| `rotationSize` | `3` | How many recent guest names the sky cycles through. |
+| `delaySeconds` | `60` | Rotation mode only. Seconds before a new name goes live (see below). |
+| `rotationSize` | `3` | Rotation mode only. How many recent guest names the sky cycles through. |
 | `timing.writeMs` | `7000` | Time the witch takes to write both lines. |
 | `timing.holdMs` | `4000` | Time the finished text stays on the sky. |
 | `timing.dissipateMs` | `4000` | Time the smoke takes to drift away. |
-| `idleNames` | Dorothy, Peter, … | Names shown before any guest name goes live. |
+| `idleNames` | Dorothy, Peter, … | Rotation mode only. Names shown before any guest name goes live. |
 | `presetNames` | Barney, Betty, … | The greeter's quick-pick list. |
 
-The server saves the queue and the current delay to `state.json`, so a restart keeps them. After the first run, the saved delay overrides `delaySeconds`. To start a fresh night, stop the server and delete `state.json`.
+The server saves the queue and the current delay to `state.json`, so a restart keeps them. The current delay is whichever changed last: the phone's −15 and +15 buttons, or an edit to `delaySeconds` while the server runs. At startup, the saved delay wins over `delaySeconds`. To start a fresh night, stop the server and delete `state.json`.
+
+## Hot reload
+
+`npm start` runs the server with Node's `--watch` option. When you save a change to `server.js` or a file in `lib/`, the server restarts by itself. The queue survives the restart because it's saved in `state.json`.
+
+The open pages reload by themselves when the server restarts or when you save a file in `public/`. A reloaded projector page picks up a one-shot name partway through. In rotation mode, it starts the next name from the beginning.
+
+The pages don't reload for a `config.json` change. They apply the new settings in place.
 
 ## Custom sky photo
 
@@ -68,7 +95,7 @@ To replace the drawn sky with a photo, save it as `public/sky.jpg` and reload th
 
 ## Development
 
-Run the unit tests for the queue logic:
+Run the unit tests for the queue rules and the config checks:
 
 ```sh
 npm test
@@ -83,7 +110,8 @@ PORT=8099 STATE_FILE=/tmp/test-state.json npm start
 | File | Purpose |
 | --- | --- |
 | `server.js` | HTTP server, JSON API and live updates over Server-Sent Events. |
-| `lib/queue.js` | Queue rules: delay, send now, remove and rotation. |
+| `lib/queue.js` | Queue rules: delay, send now, remove, rotation and one-shot slots. |
+| `lib/config.js` | Reads `config.json` and checks each setting. |
 | `public/index.html`, `public/projector.js` | The projector scene. |
 | `public/greeter.html`, `public/greeter.js` | The greeter phone page. |
 | `public/fonts/` | Dancing Script font and its license (SIL Open Font License). |
