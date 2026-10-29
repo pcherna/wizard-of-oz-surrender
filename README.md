@@ -93,6 +93,39 @@ The pages don't reload for a `config.json` change. They apply the new settings i
 
 To replace the drawn sky with a photo, save it as `public/sky.jpg` and reload the projector page. The photo pans slowly. To go back to the drawn sky, delete the file.
 
+## Test names
+
+To try the effect without the phone, press a key on the projector page:
+
+- T plays a random name from `presetNames`.
+- D plays Dorothy.
+
+A test name plays at once on the projector only. It doesn't reach the server, the greeter page or `state.json`. It replaces a rotation name or another test name.
+
+In one-shot mode, guests come first. The keys do nothing while a guest's name is on the sky. If a guest's slot starts during a test name, the test name fades off and the guest's name plays.
+
+## Upside-down projector
+
+If the projector mounts better upside down, press F on the projector page. The whole page turns 180°, including the hints. Press F again to turn it back. The page saves the setting in the browser on the laptop, the same as the keystone corners below.
+
+The flip costs no frame rate or sharpness. Most projectors also have a ceiling-mount setting that flips the picture. If yours has one, use it instead of F. The mouse pointer on the wall then moves the right way too.
+
+If you use both F and keystone correction, flip first, then drag the corners. Pressing F later turns the corrected shape around too, so it no longer fits the wall. While you drag, the mouse pointer on the wall moves the opposite way to your hand. The projector shows the laptop's own pointer upside down.
+
+## Keystone correction
+
+If the projector sits off-angle, the picture on the wall is a tilted shape instead of a rectangle. To correct it on the projector page:
+
+1. Press K. A red handle appears in each corner of the picture.
+2. Drag each handle until that corner of the picture sits where you want it on the wall.
+3. Press K again to hide the handles.
+
+To go back to the uncorrected picture, press K, then press R.
+
+The page saves the corners in the browser on the laptop, so they survive a reload and a server restart. They're fractions of the screen, so they also survive a change of resolution. A different browser or laptop starts uncorrected.
+
+The correction costs no frame rate. Any correction softens the picture a little, and the narrowed side loses some resolution. If you can, aim the projector straight instead. An uncorrected picture is pixel-exact.
+
 ## Troubleshooting
 
 - If the phone can't load the greeter page, check that the phone and laptop are on the same Wi-Fi. Guest networks often block devices from reaching each other.

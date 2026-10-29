@@ -26,6 +26,7 @@ let rotation = null;
 let lastName = null;
 let lastIndex = -1;
 let entries = [];
+let presetNames = [];
 let clockOffset = 0;     // serverNow - local now, so slots line up with the phone's countdowns
 let lastPlayedId = null; // one-shot: the slot outlasts the animation, so don't replay it
 let stopFadeMs = 1000;
@@ -240,17 +241,29 @@ function nextName() {
   return list[i];
 }
 
+// One-shot: the unplayed name whose slot covers this moment. After a page reload, that may be mid-flight.
+function dueEntry() {
+  const t = Date.now() + clockOffset;
+  const length = timing.writeMs + timing.holdMs + timing.dissipateMs;
+  return entries.find((e) => e.id !== lastPlayedId && e.liveAt <= t && t < e.liveAt + length);
+}
+
 function startNextCycle(now) {
   if (mode === 'oneshot') {
-    // Join the name whose slot covers this moment. After a page reload, that may be mid-flight.
-    const t = Date.now() + clockOffset;
-    const length = timing.writeMs + timing.holdMs + timing.dissipateMs;
-    const due = entries.find((e) => e.id !== lastPlayedId && e.liveAt <= t && t < e.liveAt + length);
-    cycle = due ? buildCycle(due.name, now - (t - due.liveAt), due.id) : null;
+    const due = dueEntry();
+    cycle = due ? buildCycle(due.name, now - (Date.now() + clockOffset - due.liveAt), due.id) : null;
     if (due) lastPlayedId = due.id;
     return;
   }
   cycle = rotation && rotation.length ? buildCycle(nextName(), now) : null;
+}
+
+// A name from the projector keyboard. It never reaches the server. It replaces a rotation name
+// or another test name, but never a guest's one-shot name, which plays only once.
+function playTestName(name) {
+  if (cycle?.id && cycle.stoppedAt === null) return;
+  cycle = { ...buildCycle(name, performance.now()), test: true };
+  trail = [];
 }
 
 // ---------- Witch ----------
@@ -501,6 +514,8 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   drawSky(now, dt);
+  // One-shot: a guest's slot has started, so fade the test name off and let the guest's name in.
+  if (cycle?.test && cycle.stoppedAt === null && mode === 'oneshot' && dueEntry()) cycle.stoppedAt = now;
   if (!cycle) startNextCycle(now);
   if (cycle && !drawCycle(now, dt)) {
     trail = [];
@@ -508,6 +523,110 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
+
+// ---------- Flip and keystone ----------
+
+// Flip turns the whole page 180°, for a projector mounted upside down. Saved in this browser only.
+const FLIP_KEY = 'flipped';
+let flipped = false;
+
+function setFlipped(on) {
+  flipped = on;
+  document.documentElement.classList.toggle('flipped', on);
+}
+
+try {
+  setFlipped(localStorage.getItem(FLIP_KEY) === 'true');
+} catch { /* storage blocked: start unflipped */ }
+
+function toggleFlipped() {
+  setFlipped(!flipped);
+  try {
+    localStorage.setItem(FLIP_KEY, String(flipped));
+  } catch { /* storage blocked: the flip lasts until reload */ }
+}
+
+// The pointer in page coordinates. On a flipped page these run the other way from the screen's.
+const pagePoint = (event) => (flipped ? [W - event.clientX, H - event.clientY] : [event.clientX, event.clientY]);
+
+// Keystone corrects an off-angle projector: the finished frame is warped so each corner lands
+// where it was dragged. Corners are fractions of the page, saved in this browser only.
+const KEYSTONE_KEY = 'keystone';
+const SQUARE = [[0, 0], [1, 0], [1, 1], [0, 1]]; // top-left, top-right, bottom-right, bottom-left
+const keystoneUi = document.getElementById('keystone');
+const handles = [...keystoneUi.querySelectorAll('.corner')];
+let corners = loadCorners();
+
+function loadCorners() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEYSTONE_KEY));
+    if (Array.isArray(saved) && saved.length === 4
+      && saved.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite))) return saved;
+  } catch { /* storage blocked or bad data: start square */ }
+  return SQUARE.map((p) => [...p]);
+}
+
+function saveCorners() {
+  try {
+    localStorage.setItem(KEYSTONE_KEY, JSON.stringify(corners));
+  } catch { /* storage blocked: the correction lasts until reload */ }
+}
+
+// The perspective transform that maps the W×H window onto four points, as CSS matrix3d.
+// Heckbert's square-to-quad mapping, scaled from the unit square to window pixels.
+function keystoneMatrix([[x0, y0], [x1, y1], [x2, y2], [x3, y3]]) {
+  const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3;
+  const dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+  const det = dx1 * dy2 - dx2 * dy1;
+  const g = (dx3 * dy2 - dx2 * dy3) / det;
+  const h = (dx1 * dy3 - dx3 * dy1) / det;
+  const a = x1 - x0 + g * x1, b = x3 - x0 + h * x3;
+  const d = y1 - y0 + g * y1, e = y3 - y0 + h * y3;
+  const m = [a / W, d / W, 0, g / W, b / H, e / H, 0, h / H, 0, 0, 1, 0, x0, y0, 0, 1]; // column-major
+  return m.every(Number.isFinite) ? `matrix3d(${m.join(',')})` : null;
+}
+
+function applyKeystone() {
+  const isSquare = corners.every(([x, y], i) => x === SQUARE[i][0] && y === SQUARE[i][1]);
+  // Square means no transform at all, so the picture stays pixel-exact.
+  const transform = isSquare ? '' : keystoneMatrix(corners.map(([x, y]) => [x * W, y * H]));
+  if (transform !== null) canvas.style.transform = transform; // null: corners in a line, keep the last shape
+  corners.forEach(([x, y], i) => {
+    handles[i].style.left = `${x * W}px`;
+    handles[i].style.top = `${y * H}px`;
+  });
+}
+
+handles.forEach((handle, i) => {
+  let grab = null; // pointer offset from the corner, so the corner doesn't jump to the pointer
+  handle.addEventListener('pointerdown', (event) => {
+    handle.setPointerCapture(event.pointerId);
+    const [x, y] = pagePoint(event);
+    grab = [x - corners[i][0] * W, y - corners[i][1] * H];
+  });
+  handle.addEventListener('pointermove', (event) => {
+    if (!grab) return;
+    const [x, y] = pagePoint(event);
+    corners[i] = [clamp01((x - grab[0]) / W), clamp01((y - grab[1]) / H)];
+    applyKeystone();
+  });
+  handle.addEventListener('lostpointercapture', () => {
+    grab = null;
+    saveCorners();
+  });
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return; // leave Cmd-R and friends alone
+  const key = event.key.toLowerCase();
+  if (key === 'f') toggleFlipped();
+  if (key === 'k') keystoneUi.hidden = !keystoneUi.hidden;
+  if (key === 'r' && !keystoneUi.hidden) {
+    corners = SQUARE.map((p) => [...p]);
+    saveCorners();
+    applyKeystone();
+  }
+});
 
 // ---------- Setup ----------
 
@@ -523,6 +642,7 @@ function resize() {
   skyGradient.addColorStop(0.55, '#3d86d6');
   skyGradient.addColorStop(1, '#9cc6ef');
   layoutClouds();
+  applyKeystone();
 }
 
 let resizeTimer;
@@ -531,7 +651,7 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => {
     resize();
     // Rebuild the current name for the new screen size, at the same point in its flight.
-    if (cycle) cycle = { ...buildCycle(cycle.name, cycle.startAt, cycle.id), stoppedAt: cycle.stoppedAt };
+    if (cycle) cycle = { ...buildCycle(cycle.name, cycle.startAt, cycle.id), stoppedAt: cycle.stoppedAt, test: cycle.test };
     trail = [];
   }, 200);
 });
@@ -541,6 +661,14 @@ document.addEventListener('click', () => {
   document.getElementById('hint').classList.add('gone');
 });
 setTimeout(() => document.getElementById('hint').classList.add('gone'), 8000);
+
+// Test names: T plays a random preset name, D plays Dorothy.
+document.addEventListener('keydown', (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const key = event.key.toLowerCase();
+  if (key === 't' && presetNames.length) playTestName(presetNames[Math.floor(Math.random() * presetNames.length)]);
+  if (key === 'd') playTestName('Dorothy');
+});
 
 let cursorTimer;
 document.addEventListener('mousemove', () => {
@@ -571,6 +699,7 @@ function connect() {
     timing = state.timing;
     rotation = state.rotation;
     entries = state.entries;
+    presetNames = state.presetNames;
     stopFadeMs = state.stopFadeMs;
     canvas.style.filter = state.brightness < 100 ? `brightness(${state.brightness}%)` : '';
     // One-shot: the name on the sky was removed on the phone, so stop it.

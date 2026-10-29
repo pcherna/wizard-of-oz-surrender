@@ -10,16 +10,31 @@
       src: url("fonts/DancingScript.ttf") format("truetype");
       font-weight: 400 700;
     }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #2f78c8; }
-    canvas { display: block; width: 100vw; height: 100vh; }
+    /* Black, so the margins around a keystoned picture don't project. */
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; width: 100vw; height: 100vh; transform-origin: 0 0; }
+    /* F flips the whole page, so the hints read the right way up from an upside-down projector. */
+    html.flipped body { transform: rotate(180deg); }
     body.idle-cursor { cursor: none; }
-    #hint {
+    #hint, #keystoneHelp {
       position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
       font: 15px -apple-system, BlinkMacSystemFont, sans-serif; color: #fff;
       background: rgba(0, 0, 0, .45); padding: 8px 16px; border-radius: 999px;
       transition: opacity 1s; pointer-events: none;
     }
     #hint.gone { opacity: 0; }
+    /* Keystone calibration: K shows a handle on each corner of the picture. */
+    #keystoneHelp { bottom: auto; top: 50%; white-space: nowrap; }
+    /* Each handle is a quarter-disc whose square corner sits on the picture corner, pointing in. */
+    .corner {
+      position: fixed; width: 48px; height: 48px; box-sizing: border-box;
+      border: 3px solid #fff; background: rgba(217, 83, 79, .6);
+      cursor: grab; touch-action: none;
+    }
+    .corner:nth-child(1) { border-bottom-right-radius: 100%; }
+    .corner:nth-child(2) { translate: -100% 0; border-bottom-left-radius: 100%; }
+    .corner:nth-child(3) { translate: -100% -100%; border-top-left-radius: 100%; }
+    .corner:nth-child(4) { translate: 0 -100%; border-top-right-radius: 100%; }
     /* Operator cue only: a small red dot when the server connection drops. */
     #offline {
       position: fixed; right: 12px; bottom: 12px; width: 10px; height: 10px; border-radius: 50%;
@@ -32,6 +47,10 @@
   <canvas id="sky"></canvas>
   <div id="hint">Click for full screen</div>
   <div id="offline" title="Not connected to the server"></div>
+  <div id="keystone" hidden>
+    <div class="corner"></div><div class="corner"></div><div class="corner"></div><div class="corner"></div>
+    <div id="keystoneHelp">Drag the corners to square the picture. R resets. F flips. K hides the corners.</div>
+  </div>
   <script src="projector.js"></script>
 </body>
 </html>
