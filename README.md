@@ -106,11 +106,11 @@ In one-shot mode, guests come first. The keys do nothing while a guest's name is
 
 ## Upside-down projector
 
-If the projector mounts better upside down, press F on the projector page. The whole page turns 180°, including the hints. Press F again to turn it back. The page saves the setting in the browser on the laptop, the same as the keystone corners below.
+If the projector mounts better upside down, press U on the projector page. The whole page turns 180°, including the hints. Press U again to turn it back. The page saves the setting in the browser on the laptop, the same as the keystone corners below.
 
-The flip costs no frame rate or sharpness. Most projectors also have a ceiling-mount setting that flips the picture. If yours has one, use it instead of F. The mouse pointer on the wall then moves the right way too.
+The flip costs no frame rate or sharpness. Most projectors also have a ceiling-mount setting that flips the picture. If yours has one, use it instead of U. The mouse pointer on the wall then moves the right way too.
 
-If you use both F and keystone correction, flip first, then drag the corners. Pressing F later turns the corrected shape around too, so it no longer fits the wall. While you drag, the mouse pointer on the wall moves the opposite way to your hand. The projector shows the laptop's own pointer upside down.
+If you use both U and keystone correction, flip first, then drag the corners. Pressing U later turns the corrected shape around too, so it no longer fits the wall. While you drag, the mouse pointer on the wall moves the opposite way to your hand. The projector shows the laptop's own pointer upside down.
 
 ## Keystone correction
 

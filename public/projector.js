@@ -619,7 +619,7 @@ handles.forEach((handle, i) => {
 document.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return; // leave Cmd-R and friends alone
   const key = event.key.toLowerCase();
-  if (key === 'f') toggleFlipped();
+  if (key === 'u') toggleFlipped();
   if (key === 'k') keystoneUi.hidden = !keystoneUi.hidden;
   if (key === 'r' && !keystoneUi.hidden) {
     corners = SQUARE.map((p) => [...p]);

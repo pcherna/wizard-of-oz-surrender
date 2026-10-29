@@ -13,7 +13,7 @@
     /* Black, so the margins around a keystoned picture don't project. */
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
     canvas { display: block; width: 100vw; height: 100vh; transform-origin: 0 0; }
-    /* F flips the whole page, so the hints read the right way up from an upside-down projector. */
+    /* U flips the whole page, so the hints read the right way up from an upside-down projector. */
     html.flipped body { transform: rotate(180deg); }
     body.idle-cursor { cursor: none; }
     #hint, #keystoneHelp {
@@ -49,7 +49,7 @@
   <div id="offline" title="Not connected to the server"></div>
   <div id="keystone" hidden>
     <div class="corner"></div><div class="corner"></div><div class="corner"></div><div class="corner"></div>
-    <div id="keystoneHelp">Drag the corners to square the picture. R resets. F flips. K hides the corners.</div>
+    <div id="keystoneHelp">Drag the corners to square the picture. R resets. U flips. K hides the corners.</div>
   </div>
   <script src="projector.js"></script>
 </body>
